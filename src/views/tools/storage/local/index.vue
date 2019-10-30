@@ -1,21 +1,22 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" style="padding: 8px;">
     <!--工具栏-->
     <div class="head-container">
-      <!--搜索-->
-      <el-input v-model="query.filename" clearable placeholder="输入文件名" style="width: 200px;" class="filter-item" @keyup.enter.native="toQuery"/>
+      <!-- 搜索 -->
+      <el-input v-model="query.value" clearable placeholder="输入内容模糊搜索" style="width: 200px;" class="filter-item" @keyup.enter.native="toQuery"/>
       <el-button class="filter-item" size="mini" type="success" icon="el-icon-search" @click="toQuery">搜索</el-button>
-      <!-- 上传 -->
+      <!-- 新增 -->
       <div style="display: inline-block;margin: 0px 2px;">
         <el-button
-          v-permission="['ADMIN','PICTURE_ALL','PICTURE_UPLOAD']"
+          v-permission="['ADMIN','LOCALSTORAGE_ALL','LOCALSTORAGE_CREATE']"
           class="filter-item"
           size="mini"
           type="primary"
           icon="el-icon-upload"
-          @click="dialog = true">上传图片</el-button>
+          @click="add">文件上传</el-button>
       </div>
-      <div v-permission="['ADMIN','PICTURE_ALL','PICTURE_DELETE']" style="display: inline-block;">
+      <!-- 多选删除 -->
+      <div style="display: inline-block;margin: 0px 2px;">
         <el-button
           :loading="delAllLoading"
           :disabled="data.length === 0 || $refs.table.selection.length === 0"
@@ -26,47 +27,35 @@
           @click="open">删除</el-button>
       </div>
     </div>
-    <!--上传图片-->
-    <el-dialog :visible.sync="dialog" :close-on-click-modal="false" append-to-body width="600px" @close="doSubmit">
-      <el-upload
-        :on-preview="handlePictureCardPreview"
-        :before-remove="handleBeforeRemove"
-        :on-success="handleSuccess"
-        :on-error="handleError"
-        :headers="headers"
-        :file-list="fileList"
-        :action="imagesUploadApi"
-        list-type="picture-card">
-        <i class="el-icon-plus"/>
-      </el-upload>
-      <el-dialog :append-to-body="true" :visible.sync="dialogVisible">
-        <img :src="dialogImageUrl" width="100%" alt="">
-      </el-dialog>
-      <div slot="footer" class="dialog-footer">
-        <el-button type="primary" @click="doSubmit">确认</el-button>
-      </div>
-    </el-dialog>
+    <!--表单组件-->
+    <eForm ref="form" :is-add="isAdd"/>
     <!--表格渲染-->
     <el-table v-loading="loading" ref="table" :data="data" size="small" style="width: 100%;">
       <el-table-column type="selection" width="55"/>
-      <el-table-column prop="filename" label="文件名"/>
-      <el-table-column prop="username" label="上传者"/>
-      <el-table-column ref="table" :show-overflow-tooltip="true" prop="url" label="缩略图">
+      <el-table-column :show-overflow-tooltip="true" prop="name" label="文件名">
         <template slot-scope="scope">
-          <a :href="scope.row.url" style="color: #42b983" target="_blank"><img :src="scope.row.url" alt="点击打开" class="el-avatar"></a>
+          <el-link :underline="false" :href="baseApi + '/file/' + scope.row.type + '/' + scope.row.realName" target="_blank" type="primary">{{ scope.row.name }}</el-link>
         </template>
       </el-table-column>
-      <el-table-column prop="size" label="文件大小"/>
-      <el-table-column prop="height" label="高度"/>
-      <el-table-column prop="width" label="宽度"/>
-      <el-table-column width="180px" prop="createTime" label="创建日期">
+      <el-table-column prop="suffix" label="文件类型"/>
+      <el-table-column prop="type" label="类别"/>
+      <el-table-column prop="size" label="大小"/>
+      <el-table-column prop="operate" label="操作人"/>
+      <el-table-column prop="createTime" label="创建日期">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="checkPermission(['ADMIN','PICTURE_ALL','PICTURE_DELETE'])" label="操作" width="100px" align="center" fixed="right">
+      <el-table-column prop="updateTime" label="修改日期">
         <template slot-scope="scope">
+          <span>{{ parseTime(scope.row.updateTime) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column v-if="checkPermission(['ADMIN','LOCALSTORAGE_ALL','LOCALSTORAGE_EDIT','LOCALSTORAGE_DELETE'])" label="操作" width="150px" align="center">
+        <template slot-scope="scope">
+          <el-button v-permission="['ADMIN','LOCALSTORAGE_ALL','LOCALSTORAGE_EDIT']" size="mini" type="primary" icon="el-icon-edit" @click="edit(scope.row)"/>
           <el-popover
+            v-permission="['ADMIN','LOCALSTORAGE_ALL','LOCALSTORAGE_DELETE']"
             :ref="scope.row.id"
             placement="top"
             width="180">
@@ -92,32 +81,29 @@
 </template>
 
 <script>
-import checkPermission from '@/utils/permission' // 权限判断函数
-import initData from '@/mixins/initData'
-import { parseTime } from '@/utils/index'
 import { mapGetters } from 'vuex'
-import { del, delAll } from '@/api/picture'
-import { getToken } from '@/utils/auth'
+import checkPermission from '@/utils/permission'
+import initData from '@/mixins/initData'
+import { del, delAll } from '@/api/localStorage'
+import { parseTime } from '@/utils/index'
+import eForm from './form'
 export default {
-  name: 'Pictures',
+  components: { eForm },
   mixins: [initData],
   data() {
     return {
-      delLoading: false, downloadLoading: false,
-      delAllLoading: false,
-      headers: {
-        'Authorization': 'Bearer ' + getToken()
-      },
-      dialog: false,
-      dialogImageUrl: '',
-      dialogVisible: false,
-      fileList: [],
-      pictures: []
+      delLoading: false, delAllLoading: false,
+      queryTypeOptions: [
+        { key: 'name', display_name: '文件名' },
+        { key: 'suffix', display_name: '后缀' },
+        { key: 'type', display_name: '类型' },
+        { key: 'operate', display_name: '操作人' }
+      ]
     }
   },
   computed: {
     ...mapGetters([
-      'imagesUploadApi'
+      'baseApi'
     ])
   },
   created() {
@@ -129,12 +115,12 @@ export default {
     parseTime,
     checkPermission,
     beforeInit() {
-      this.url = 'api/pictures'
+      this.url = 'api/localStorage'
       const sort = 'id,desc'
-      const query = this.query
-      const filename = query.filename
       this.params = { page: this.page, size: this.size, sort: sort }
-      if (filename) { this.params[filename] = filename }
+      const query = this.query
+      const value = query.value
+      if (value) { this.params['blurry'] = value }
       return true
     },
     subDelete(id) {
@@ -155,6 +141,19 @@ export default {
         console.log(err.response.data.message)
       })
     },
+    add() {
+      this.isAdd = true
+      this.$refs.form.dialog = true
+    },
+    edit(data) {
+      this.isAdd = false
+      const _this = this.$refs.form
+      _this.form = {
+        id: data.id,
+        name: data.name
+      }
+      _this.dialog = true
+    },
     doDelete() {
       this.delAllLoading = true
       const data = this.$refs.table.selection
@@ -164,8 +163,8 @@ export default {
       }
       delAll(ids).then(res => {
         this.delAllLoading = false
-        this.init()
         this.dleChangePage(ids.length)
+        this.init()
         this.$notify({
           title: '删除成功',
           type: 'success',
@@ -183,40 +182,6 @@ export default {
         type: 'warning'
       }).then(() => {
         this.doDelete()
-      })
-    },
-    handleSuccess(response, file, fileList) {
-      const uid = file.uid
-      const id = response.id
-      this.pictures.push({ uid, id })
-    },
-    handleBeforeRemove(file, fileList) {
-      for (let i = 0; i < this.pictures.length; i++) {
-        if (this.pictures[i].uid === file.uid) {
-          del(this.pictures[i].id).then(res => {})
-          return true
-        }
-      }
-    },
-    handlePictureCardPreview(file) {
-      this.dialogImageUrl = file.url
-      this.dialogVisible = true
-    },
-    // 刷新列表数据
-    doSubmit() {
-      this.fileList = []
-      this.dialogVisible = false
-      this.dialogImageUrl = ''
-      this.dialog = false
-      this.init()
-    },
-    // 监听上传失败
-    handleError(e, file, fileList) {
-      const msg = JSON.parse(e.message)
-      this.$notify({
-        title: msg.message,
-        type: 'error',
-        duration: 2500
       })
     }
   }
