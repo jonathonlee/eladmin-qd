@@ -44,6 +44,7 @@
         <!--表格渲染-->
         <el-table v-loading="loading" :data="data" size="small" style="width: 100%;">
           <el-table-column prop="username" label="用户名"/>
+          <el-table-column prop="realName" label="真实名"/>
           <el-table-column prop="phone" label="电话"/>
           <el-table-column :show-overflow-tooltip="true" prop="email" label="邮箱"/>
           <el-table-column label="部门 / 岗位">
@@ -219,7 +220,7 @@ export default {
       _this.getDepts()
       _this.getRoleLevel()
       _this.roleIds = []
-      _this.form = { id: data.id, username: data.username, phone: data.phone, email: data.email, enabled: data.enabled.toString(), roles: [], dept: { id: data.dept.id }, job: { id: data.job.id }}
+      _this.form = { id: data.id,realName:data.realName, username: data.username, phone: data.phone, email: data.email, enabled: data.enabled.toString(), roles: [], dept: { id: data.dept.id }, job: { id: data.job.id }}
       data.roles.forEach(function(data, index) {
         _this.roleIds.push(data.id)
       })

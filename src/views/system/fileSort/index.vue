@@ -94,7 +94,7 @@ export default {
     this.$nextTick(() => {
       this.init()
       // 加载数据字典
-      this.getDict('sort_status')
+      this.getDict('dept_status')
     })
   },
   methods: {
